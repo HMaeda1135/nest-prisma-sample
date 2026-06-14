@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: nest-prisma-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nest_prisma_sample
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
