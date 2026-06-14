@@ -1,98 +1,145 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# nest-prisma-sample
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS + Docker + PrismaでPostgreSQLに接続する最小構成のサンプルです。
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Qiita記事「NestJS + Docker + PrismaでPostgreSQLに接続する最小構成を作ってみる」の検証用リポジトリです。
 
-## Description
+## 使用技術
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+* Node.js
+* NestJS
+* TypeScript
+* Docker
+* PostgreSQL
+* Prisma
 
-## Project setup
+## 検証環境
 
-```bash
-$ npm install
+```txt
+Node.js: 24.13.0
+npm: 11.6.2
+NestJS: @nestjs/core 11.0.1
+Prisma CLI: 7.8.0
+Prisma Client: 7.8.0
+PostgreSQL: 16
+OS: Windows 11
+Docker Desktop: 4.77.0
 ```
 
-## Compile and run the project
+## このリポジトリで確認できること
+
+* Docker ComposeでPostgreSQLを起動する
+* Prisma 7系で `schema.prisma` / `prisma.config.ts` を設定する
+* Prisma MigrateでDBにテーブルを作成する
+* Prisma Clientを生成する
+* NestJSからPrisma経由でPostgreSQLに接続する
+* `POST /users` でユーザーを作成する
+* `GET /users` でユーザー一覧を取得する
+
+## セットアップ
+
+依存パッケージをインストールします。
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+PostgreSQLを起動します。
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+docker compose up -d
 ```
 
-## Deployment
+`.env` を作成し、DB接続URLを設定します。
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nest_prisma_sample?schema=public"
+```
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+migrationを実行します。
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npx prisma migrate dev --name init
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Prisma Clientを生成します。
 
-## Resources
+```bash
+npx prisma generate
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+NestJSを起動します。
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+npm run start:dev
+```
 
-## Support
+## 動作確認
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+ユーザーを作成します。
 
-## Stay in touch
+```bash
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","name":"Test User"}'
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+ユーザー一覧を取得します。
 
-## License
+```bash
+curl http://localhost:3000/users
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+レスポンス例です。
+
+```json
+[
+  {
+    "id": 1,
+    "email": "test@example.com",
+    "name": "Test User",
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  }
+]
+```
+
+## Windows cmdでcurlを実行する場合
+
+Windowsのcmdで実行する場合は、改行やクォートの書き方が異なります。
+
+```cmd
+curl -X POST http://localhost:3000/users ^
+  -H "Content-Type: application/json" ^
+  -d "{\"email\":\"test@example.com\",\"name\":\"Test User\"}"
+```
+
+## DBをリセットしたい場合
+
+開発用DBのデータを消して再検証したい場合は、以下を実行します。
+
+```bash
+npx prisma migrate reset
+```
+
+Docker volumeごと削除して完全に初期化したい場合は、以下を実行します。
+
+```bash
+docker compose down -v
+docker compose up -d
+npx prisma migrate dev --name init
+npx prisma generate
+```
+
+`docker compose down -v` はPostgreSQLのデータも削除するため、開発・検証用DBでのみ使用します。
+
+## 補足
+
+このサンプルはPrisma 7系を前提にしています。
+
+Prisma 7系では、DB接続URLを `schema.prisma` の `datasource` に直接書くのではなく、`prisma.config.ts` 側で扱います。
+
+また、`migrate dev` はDB側の更新、`prisma generate` はTypeScriptから使うPrisma Clientの生成、という役割です。
+
+## 関連記事
+
+* Qiita: https://qiita.com/hiro92196/items/a04d8079d6c87817e5db
