@@ -247,4 +247,4 @@ npx prisma migrate reset
 
 ## 関連記事
 
-* Qiita: https://qiita.com/hiro92196/items/
+* Qiita: https://qiita.com/hiro92196/items/8caed73e0c789859ac5f
