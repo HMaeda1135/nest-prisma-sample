@@ -1,145 +1,250 @@
-# nest-prisma-sample
+# NestJS Prisma Validation Sample
 
-NestJS + Docker + PrismaでPostgreSQLに接続する最小構成のサンプルです。
+NestJS + Prismaで作成したPOST APIに、DTOと `ValidationPipe` を追加して入力チェックを行うサンプルです。
 
-Qiita記事「NestJS + Docker + PrismaでPostgreSQLに接続する最小構成を作ってみる」の検証用リポジトリです。
+`class-validator` / `class-transformer` を使い、リクエストbodyの値をDB登録前に検証します。
 
 ## 使用技術
 
-* Node.js
 * NestJS
-* TypeScript
-* Docker
-* PostgreSQL
 * Prisma
+* PostgreSQL
+* Docker
+* TypeScript
+* class-validator
+* class-transformer
 
-## 検証環境
+## このサンプルで確認できること
 
-```txt
-Node.js: 24.13.0
-npm: 11.6.2
-NestJS: @nestjs/core 11.0.1
-Prisma CLI: 7.8.0
-Prisma Client: 7.8.0
-PostgreSQL: 16
-OS: Windows 11
-Docker Desktop: 4.77.0
-```
-
-## このリポジトリで確認できること
-
-* Docker ComposeでPostgreSQLを起動する
-* Prisma 7系で `schema.prisma` / `prisma.config.ts` を設定する
-* Prisma MigrateでDBにテーブルを作成する
-* Prisma Clientを生成する
-* NestJSからPrisma経由でPostgreSQLに接続する
-* `POST /users` でユーザーを作成する
-* `GET /users` でユーザー一覧を取得する
+* NestJS + PrismaでPOST APIを作成する
+* DTOでリクエストbodyの形を定義する
+* `class-validator` のデコレーターで入力ルールを書く
+* `ValidationPipe` を使ってDTOの検証を有効化する
+* `whitelist` / `forbidNonWhitelisted` で想定外のプロパティを制御する
+* PrismaでPostgreSQLにデータを登録する
+* DTOとPrismaの型の役割の違いを確認する
 
 ## セットアップ
 
-依存パッケージをインストールします。
+依存関係をインストールします。
 
-```bash
+```cmd
 npm install
 ```
 
-PostgreSQLを起動します。
+DockerでPostgreSQLを起動します。
 
-```bash
+```cmd
 docker compose up -d
 ```
 
-`.env` を作成し、DB接続URLを設定します。
+Prisma migrationを実行します。
 
-```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nest_prisma_sample?schema=public"
-```
-
-migrationを実行します。
-
-```bash
-npx prisma migrate dev --name init
+```cmd
+npx prisma migrate dev
 ```
 
 Prisma Clientを生成します。
 
-```bash
+```cmd
 npx prisma generate
 ```
 
-NestJSを起動します。
+## 起動方法
 
-```bash
+開発サーバーを起動します。
+
+```cmd
 npm run start:dev
+```
+
+起動後、以下のエンドポイントでPOST APIを確認できます。
+
+```txt
+POST http://localhost:3000/users
 ```
 
 ## 動作確認
 
-ユーザーを作成します。
+### 正常系
 
-```bash
-curl -X POST http://localhost:3000/users \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","name":"Test User"}'
+```cmd
+curl -X POST http://localhost:3000/users ^
+  -H "Content-Type: application/json" ^
+  -d "{\"name\":\"Taro\",\"email\":\"taro@example.com\"}"
 ```
 
-ユーザー一覧を取得します。
+`email` には `@unique` を付けているため、同じメールアドレスで2回実行するとPrisma側の一意制約エラーになります。
 
-```bash
-curl http://localhost:3000/users
+再実行する場合は、別のメールアドレスに変更してください。
+
+```cmd
+curl -X POST http://localhost:3000/users ^
+  -H "Content-Type: application/json" ^
+  -d "{\"name\":\"Taro\",\"email\":\"taro2@example.com\"}"
+```
+
+### バリデーションエラー
+
+```cmd
+curl -X POST http://localhost:3000/users ^
+  -H "Content-Type: application/json" ^
+  -d "{\"name\":\"\",\"email\":\"not-email\"}"
 ```
 
 レスポンス例です。
 
 ```json
-[
-  {
-    "id": 1,
-    "email": "test@example.com",
-    "name": "Test User",
-    "createdAt": "2026-01-01T00:00:00.000Z"
-  }
-]
+{
+  "message": [
+    "name should not be empty",
+    "email must be an email"
+  ],
+  "error": "Bad Request",
+  "statusCode": 400
+}
 ```
 
-## Windows cmdでcurlを実行する場合
-
-Windowsのcmdで実行する場合は、改行やクォートの書き方が異なります。
+### DTOにないプロパティを送った場合
 
 ```cmd
 curl -X POST http://localhost:3000/users ^
   -H "Content-Type: application/json" ^
-  -d "{\"email\":\"test@example.com\",\"name\":\"Test User\"}"
+  -d "{\"name\":\"Taro\",\"email\":\"taro@example.com\",\"role\":\"admin\"}"
 ```
 
-## DBをリセットしたい場合
+レスポンス例です。
 
-開発用DBのデータを消して再検証したい場合は、以下を実行します。
+```json
+{
+  "message": [
+    "property role should not exist"
+  ],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
 
-```bash
+## DB確認
+
+Prisma Studioで確認できます。
+
+```cmd
+npx prisma studio
+```
+
+PostgreSQLに直接接続する場合は、まずコンテナ名を確認します。
+
+```cmd
+docker ps
+```
+
+`NAMES` に表示されたコンテナ名を使って接続します。
+
+```cmd
+docker exec -it コンテナ名 psql -U postgres -d nest_prisma_sample
+```
+
+psqlに入ったら、以下で確認できます。
+
+```sql
+\dt
+SELECT * FROM "User";
+\d "User"
+```
+
+終了する場合は以下です。
+
+```sql
+\q
+```
+
+## 主なファイル構成
+
+```txt
+prisma/
+└─ schema.prisma
+
+src/
+├─ main.ts
+├─ prisma/
+│  └─ prisma.service.ts
+└─ users/
+   ├─ dto/
+   │  └─ create-user.dto.ts
+   ├─ users.controller.ts
+   ├─ users.module.ts
+   └─ users.service.ts
+```
+
+## 補足・注意点
+
+### DTOのプロパティに `!` を付ける理由
+
+DTOのプロパティで以下のようなエラーが出る場合があります。
+
+```txt
+Property 'name' has no initializer and is not definitely assigned in the constructor.
+```
+
+このサンプルでは、以下のように `!` を付けて対応しています。
+
+```ts
+name!: string;
+email!: string;
+```
+
+DTOの値はリクエストbodyからセットされるため、definite assignment assertionを使っています。
+
+### DTOとPrismaの型の役割
+
+DTOとPrismaの型は、似ているようで役割が違います。
+
+DTOは、APIに入ってくるリクエストbodyの形を定義するものです。
+
+Prismaの型は、Prismaを使ってDB操作するときの型を安全にするものです。
+
+| 種類             | 主な役割                  |
+| -------------- | --------------------- |
+| DTO            | APIで受け取る入力値の形を定義する    |
+| ValidationPipe | DTOに書いたルールでリクエストを検証する |
+| Prismaの型       | DB操作の型安全性を高める         |
+
+DTOはAPIの入口を守るもの、Prismaの型はDB操作を安全にするもの、と考えると分かりやすいです。
+
+### migration時の注意
+
+既存データがある状態で、必須カラムを追加するとmigrationでエラーになることがあります。
+
+例：
+
+```txt
+Added the required column `updatedAt` to the `User` table without a default value.
+```
+
+検証用DBでデータを消してよい場合は、以下でリセットできます。
+
+```cmd
 npx prisma migrate reset
 ```
 
-Docker volumeごと削除して完全に初期化したい場合は、以下を実行します。
+ただし、DBのデータが削除されるため注意してください。
 
-```bash
-docker compose down -v
-docker compose up -d
-npx prisma migrate dev --name init
-npx prisma generate
-```
+## 参考
 
-`docker compose down -v` はPostgreSQLのデータも削除するため、開発・検証用DBでのみ使用します。
+* NestJS Docs - Validation
+  https://docs.nestjs.com/techniques/validation
 
-## 補足
+* NestJS Docs - Pipes
+  https://docs.nestjs.com/pipes
 
-このサンプルはPrisma 7系を前提にしています。
+* NestJS Docs - Prisma
+  https://docs.nestjs.com/recipes/prisma
 
-Prisma 7系では、DB接続URLを `schema.prisma` の `datasource` に直接書くのではなく、`prisma.config.ts` 側で扱います。
+* Prisma Docs - How to use Prisma ORM and Prisma Postgres with NestJS
+  https://www.prisma.io/docs/guides/frameworks/nestjs
 
-また、`migrate dev` はDB側の更新、`prisma generate` はTypeScriptから使うPrisma Clientの生成、という役割です。
 
 ## 関連記事
 
-* Qiita: https://qiita.com/hiro92196/items/a04d8079d6c87817e5db
+* Qiita: https://qiita.com/hiro92196/items/
