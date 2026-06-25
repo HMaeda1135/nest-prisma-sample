@@ -1,8 +1,14 @@
-# NestJS Prisma Validation Sample
+# NestJS Prisma Unique Conflict Sample
 
-NestJS + Prismaで作成したPOST APIに、DTOと `ValidationPipe` を追加して入力チェックを行うサンプルです。
+NestJS + Prismaで、一意制約エラーを `409 Conflict` として返すサンプルです。
 
-`class-validator` / `class-transformer` を使い、リクエストbodyの値をDB登録前に検証します。
+Prismaの `P2002` エラーを捕捉し、NestJSの `ConflictException` に変換することで、同じメールアドレスを登録した場合に適切なHTTPステータスを返します。
+
+## 概要
+
+このリポジトリでは、NestJS + Prismaで作成したユーザー登録APIに対して、一意制約エラーのハンドリングを追加しています。
+
+`email` に `@unique` を設定し、同じメールアドレスでユーザー登録しようとした場合に、Prismaのエラーをそのまま返すのではなく、`409 Conflict` として返すことを確認します。
 
 ## 使用技術
 
@@ -16,13 +22,12 @@ NestJS + Prismaで作成したPOST APIに、DTOと `ValidationPipe` を追加し
 
 ## このサンプルで確認できること
 
-* NestJS + PrismaでPOST APIを作成する
-* DTOでリクエストbodyの形を定義する
-* `class-validator` のデコレーターで入力ルールを書く
-* `ValidationPipe` を使ってDTOの検証を有効化する
-* `whitelist` / `forbidNonWhitelisted` で想定外のプロパティを制御する
-* PrismaでPostgreSQLにデータを登録する
-* DTOとPrismaの型の役割の違いを確認する
+* Prismaの一意制約エラーを発生させる
+* Prismaの `P2002` エラーを捕捉する
+* `PrismaClientKnownRequestError` でPrismaの既知エラーを判定する
+* NestJSの `ConflictException` を使って `409 Conflict` を返す
+* DTO / ValidationPipeの入力チェックとDB制約エラーの違いを確認する
+* 作成APIと更新APIで一意制約エラーを考慮する
 
 ## セットアップ
 
@@ -58,7 +63,7 @@ npx prisma generate
 npm run start:dev
 ```
 
-起動後、以下のエンドポイントでPOST APIを確認できます。
+起動後、以下のエンドポイントでAPIを確認できます。
 
 ```txt
 POST http://localhost:3000/users
@@ -68,23 +73,39 @@ POST http://localhost:3000/users
 
 ### 正常系
 
+まず、ユーザーを作成します。
+
 ```cmd
 curl -X POST http://localhost:3000/users ^
   -H "Content-Type: application/json" ^
   -d "{\"name\":\"Taro\",\"email\":\"taro@example.com\"}"
 ```
 
-`email` には `@unique` を付けているため、同じメールアドレスで2回実行するとPrisma側の一意制約エラーになります。
+正常に作成されると、作成されたユーザー情報が返ります。
 
-再実行する場合は、別のメールアドレスに変更してください。
+### 一意制約エラー
+
+同じメールアドレスでもう一度リクエストします。
 
 ```cmd
 curl -X POST http://localhost:3000/users ^
   -H "Content-Type: application/json" ^
-  -d "{\"name\":\"Taro\",\"email\":\"taro2@example.com\"}"
+  -d "{\"name\":\"Taro\",\"email\":\"taro@example.com\"}"
+```
+
+以下のように `409 Conflict` が返ればOKです。
+
+```json
+{
+  "message": "Email already exists",
+  "error": "Conflict",
+  "statusCode": 409
+}
 ```
 
 ### バリデーションエラー
+
+DTOのルールに違反する値を送ります。
 
 ```cmd
 curl -X POST http://localhost:3000/users ^
@@ -92,7 +113,7 @@ curl -X POST http://localhost:3000/users ^
   -d "{\"name\":\"\",\"email\":\"not-email\"}"
 ```
 
-レスポンス例です。
+以下のように `400 Bad Request` が返ります。
 
 ```json
 {
@@ -105,27 +126,94 @@ curl -X POST http://localhost:3000/users ^
 }
 ```
 
-### DTOにないプロパティを送った場合
+### 更新APIでの一意制約エラー
 
-```cmd
-curl -X POST http://localhost:3000/users ^
-  -H "Content-Type: application/json" ^
-  -d "{\"name\":\"Taro\",\"email\":\"taro@example.com\",\"role\":\"admin\"}"
+すでに以下の2件が存在する状態を想定します。
+
+```txt
+id: 1, email: taro@example.com
+id: 2, email: jiro@example.com
 ```
 
-レスポンス例です。
+`id: 2` のメールアドレスを、既に存在する `taro@example.com` に変更しようとします。
 
-```json
-{
-  "message": [
-    "property role should not exist"
-  ],
-  "error": "Bad Request",
-  "statusCode": 400
+```cmd
+curl -X PATCH http://localhost:3000/users/2 ^
+  -H "Content-Type: application/json" ^
+  -d "{\"email\":\"taro@example.com\"}"
+```
+
+この場合も、`409 Conflict` が返ることを確認します。
+
+## 主なファイル構成
+
+```txt
+prisma/
+└─ schema.prisma
+
+src/
+├─ main.ts
+├─ prisma/
+│  └─ prisma.service.ts
+└─ users/
+   ├─ dto/
+   │  ├─ create-user.dto.ts
+   │  └─ update-user.dto.ts
+   ├─ users.controller.ts
+   ├─ users.module.ts
+   └─ users.service.ts
+```
+
+## 補足
+
+### Prisma schema
+
+`User` モデルでは、`email` に `@unique` を設定しています。
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }
 ```
 
-## DB確認
+この設定により、同じメールアドレスを複数登録しようとすると、Prisma側で一意制約エラーが発生します。
+
+### P2002について
+
+Prismaでは、一意制約違反が発生した場合、エラーコード `P2002` が返ります。
+
+このサンプルでは、`P2002` を捕捉して `ConflictException` を投げることで、HTTPレスポンスとして `409 Conflict` を返しています。
+
+```ts
+if (
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  error.code === 'P2002'
+) {
+  throw new ConflictException('Email already exists');
+}
+```
+
+### DTOのバリデーションとの違い
+
+DTOと `ValidationPipe` は、リクエストbodyの形式をチェックします。
+
+たとえば、メール形式ではない値や空文字は `400 Bad Request` として扱います。
+
+一方で、`email` が既にDBに存在するかどうかは、DTOだけでは判断できません。
+
+そのため、DBの一意制約エラーはPrisma側で捕捉し、`409 Conflict` として返します。
+
+| エラー内容            | 発生する場所               | ステータス           |
+| ---------------- | -------------------- | --------------- |
+| メール形式ではない        | DTO / ValidationPipe | 400 Bad Request |
+| 必須項目が空           | DTO / ValidationPipe | 400 Bad Request |
+| 同じメールアドレスが既に存在する | Prisma / DB制約        | 409 Conflict    |
+
+### DB確認
 
 Prisma Studioで確認できます。
 
@@ -159,92 +247,32 @@ SELECT * FROM "User";
 \q
 ```
 
-## 主なファイル構成
+### 500エラーになる場合
 
-```txt
-prisma/
-└─ schema.prisma
+期待どおり `409 Conflict` にならず、`500 Internal server error` になる場合は、サーバーログを確認します。
 
-src/
-├─ main.ts
-├─ prisma/
-│  └─ prisma.service.ts
-└─ users/
-   ├─ dto/
-   │  └─ create-user.dto.ts
-   ├─ users.controller.ts
-   ├─ users.module.ts
-   └─ users.service.ts
-```
+主な原因は以下です。
 
-## 補足・注意点
-
-### DTOのプロパティに `!` を付ける理由
-
-DTOのプロパティで以下のようなエラーが出る場合があります。
-
-```txt
-Property 'name' has no initializer and is not definitely assigned in the constructor.
-```
-
-このサンプルでは、以下のように `!` を付けて対応しています。
-
-```ts
-name!: string;
-email!: string;
-```
-
-DTOの値はリクエストbodyからセットされるため、definite assignment assertionを使っています。
-
-### DTOとPrismaの型の役割
-
-DTOとPrismaの型は、似ているようで役割が違います。
-
-DTOは、APIに入ってくるリクエストbodyの形を定義するものです。
-
-Prismaの型は、Prismaを使ってDB操作するときの型を安全にするものです。
-
-| 種類             | 主な役割                  |
-| -------------- | --------------------- |
-| DTO            | APIで受け取る入力値の形を定義する    |
-| ValidationPipe | DTOに書いたルールでリクエストを検証する |
-| Prismaの型       | DB操作の型安全性を高める         |
-
-DTOはAPIの入口を守るもの、Prismaの型はDB操作を安全にするもの、と考えると分かりやすいです。
-
-### migration時の注意
-
-既存データがある状態で、必須カラムを追加するとmigrationでエラーになることがあります。
-
-例：
-
-```txt
-Added the required column `updatedAt` to the `User` table without a default value.
-```
-
-検証用DBでデータを消してよい場合は、以下でリセットできます。
-
-```cmd
-npx prisma migrate reset
-```
-
-ただし、DBのデータが削除されるため注意してください。
+* PostgreSQLが起動していない
+* migrationが未適用
+* `DATABASE_URL` が間違っている
+* `updatedAt` などの必須カラムでエラーになっている
+* `P2002` 以外のPrismaエラーが発生している
 
 ## 参考
 
-* NestJS Docs - Validation
-  https://docs.nestjs.com/techniques/validation
+* NestJS Docs - Exception filters
+  https://docs.nestjs.com/exception-filters
 
-* NestJS Docs - Pipes
-  https://docs.nestjs.com/pipes
+* NestJS Docs - Built-in HTTP exceptions
+  https://docs.nestjs.com/exception-filters#built-in-http-exceptions
 
-* NestJS Docs - Prisma
-  https://docs.nestjs.com/recipes/prisma
+* Prisma Docs - Error reference
+  https://www.prisma.io/docs/orm/reference/error-reference
 
-* Prisma Docs - How to use Prisma ORM and Prisma Postgres with NestJS
-  https://www.prisma.io/docs/guides/frameworks/nestjs
-
+* Prisma Docs - CRUD
+  https://www.prisma.io/docs/orm/prisma-client/queries/crud
 
 ## 関連記事
 
-* Qiita: https://qiita.com/hiro92196/items/8caed73e0c789859ac5f
+* Qiita: 
